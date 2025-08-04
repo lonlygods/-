@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF.js 字体修复解决方案</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+        }
+        .upload-section:hover {
+            border-color: #007bff;
+        }
+        #fileInput {
+            display: none;
+        }
+        .upload-btn {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .upload-btn:hover {
+            background: #0056b3;
+        }
+        #pdfContainer {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+            overflow: auto;
+        }
+        .info-panel {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .info-panel h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .font-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 2px;
+        }
+        .font-loaded {
+            background: #d4edda;
+            color: #155724;
+        }
+        .font-missing {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .font-loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF.js 字体修复解决方案</h1>
+        
+        <div class="info-panel">
+            <h3>字体状态监控</h3>
+            <div id="fontStatus"></div>
+        </div>
+
+        <div class="upload-section">
+            <input type="file" id="fileInput" accept=".pdf" />
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                选择 PDF 文件
+            </button>
+            <p>支持的文件格式: PDF</p>
+        </div>
+
+        <div id="pdfContainer"></div>
+    </div>
+
+    <!-- PDF.js 库 -->
+    <script src="/pdfjs-dist/build/pdf.js"></script>
+    <script src="/pdfjs-dist/build/pdf.worker.js"></script>
+    
+    <script>
+        // PDF.js 配置
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs-dist/build/pdf.worker.js';
+
+        // 字体加载状态
+        let fontStatus = {
+            loaded: 0,
+            missing: 0,
+            loading: 0
+        };
+
+        // 更新字体状态显示
+        function updateFontStatus() {
+            const statusDiv = document.getElementById('fontStatus');
+            statusDiv.innerHTML = `
+                <span class="font-loaded">已加载: ${fontStatus.loaded}</span>
+                <span class="font-loading">加载中: ${fontStatus.loading}</span>
+                <span class="font-missing">缺失: ${fontStatus.missing}</span>
+            `;
+        }
+
+        // 初始化字体状态
+        updateFontStatus();
+
+        // 自定义字体映射
+        const fontMap = {
+            'SimSun': '/fonts/simsun.ttf',
+            'SimHei': '/fonts/simhei.ttf',
+            'Microsoft YaHei': '/fonts/msyh.ttf',
+            'KaiTi': '/fonts/kaiti.ttf',
+            'FangSong': '/fonts/fangsong.ttf',
+            'STSong': '/fonts/stsong.ttf',
+            'STZhongsong': '/fonts/stzhongsong.ttf',
+            'STKaiti': '/fonts/stkaiti.ttf',
+            'STFangsong': '/fonts/stfangsong.ttf',
+            'STLiti': '/fonts/stliti.ttf',
+            'STXingkai': '/fonts/stxingkai.ttf',
+            'STHupo': '/fonts/sthupo.ttf',
+            'STXihei': '/fonts/stxihei.ttf',
+            'STKaiti': '/fonts/stkaiti.ttf',
+            'STSong': '/fonts/stsong.ttf',
+            'STZhongsong': '/fonts/stzhongsong.ttf',
+            'STFangsong': '/fonts/stfangsong.ttf',
+            'STLiti': '/fonts/stliti.ttf',
+            'STXingkai': '/fonts/stxingkai.ttf',
+            'STHupo': '/fonts/sthupo.ttf',
+            'STXihei': '/fonts/stxihei.ttf'
+        };
+
+        // 字体预加载
+        function preloadFonts() {
+            const fontPromises = [];
+            
+            for (const [fontName, fontUrl] of Object.entries(fontMap)) {
+                fontStatus.loading++;
+                updateFontStatus();
+                
+                const fontPromise = new FontFace(fontName, `url(${fontUrl})`)
+                    .load()
+                    .then(font => {
+                        document.fonts.add(font);
+                        fontStatus.loading--;
+                        fontStatus.loaded++;
+                        updateFontStatus();
+                        console.log(`字体 ${fontName} 加载成功`);
+                    })
+                    .catch(error => {
+                        fontStatus.loading--;
+                        fontStatus.missing++;
+                        updateFontStatus();
+                        console.warn(`字体 ${fontName} 加载失败:`, error);
+                    });
+                
+                fontPromises.push(fontPromise);
+            }
+            
+            return Promise.allSettled(fontPromises);
+        }
+
+        // 加载 PDF
+        async function loadPDF(file) {
+            const container = document.getElementById('pdfContainer');
+            container.innerHTML = '<p>正在加载 PDF...</p>';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                container.innerHTML = '';
+                
+                // 渲染所有页面
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.style.marginBottom = '20px';
+                    canvas.style.border = '1px solid #ddd';
+                    
+                    container.appendChild(canvas);
+                    
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    
+                    await page.render(renderContext).promise;
+                }
+                
+                console.log('PDF 渲染完成');
+                
+            } catch (error) {
+                console.error('PDF 加载失败:', error);
+                container.innerHTML = `<p style="color: red;">PDF 加载失败: ${error.message}</p>`;
+            }
+        }
+
+        // 文件选择事件
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                loadPDF(file);
+            } else {
+                alert('请选择有效的 PDF 文件');
+            }
+        });
+
+        // 页面加载时预加载字体
+        window.addEventListener('load', function() {
+            preloadFonts().then(() => {
+                console.log('字体预加载完成');
+            });
+        });
+
+        // 拖拽上传
+        const uploadSection = document.querySelector('.upload-section');
+        
+        uploadSection.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#007bff';
+        });
+        
+        uploadSection.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#ddd';
+        });
+        
+        uploadSection.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#ddd';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                loadPDF(files[0]);
+            } else {
+                alert('请拖拽有效的 PDF 文件');
+            }
+        });
+    </script>
+</body>
+</html>
